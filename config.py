@@ -4,13 +4,17 @@ Configuration file for WooCommerce CSV Generator
 
 import os
 from typing import Optional, List
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class Config:
     """Configuration settings"""
     
-    # Gemini API
-    GEMINI_API_KEY: Optional[str] = "AIzaSyAKALv9-BSgWUbkbk4uSMksr9thbU9Ls6E"
+    # Gemini API - load from .env file or environment variable
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
     
     # Batch settings
     BATCH_SIZE: int = 15  # Products per API call (10-20 recommended)

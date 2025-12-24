@@ -23,11 +23,8 @@ class PromptBuilder:
         
         formatted += f"Product Details:\n"
         
-        # Include all available data (but note we want only most important used)
+        # Include all available data including SKU
         for key, value in product.items():
-            # Skip internal metadata
-            if key.startswith('_'):
-                continue
             formatted += f"  {key}: {value}\n"
         
         formatted += "\n"
@@ -37,188 +34,142 @@ class PromptBuilder:
     def build_prompt(self, products: List[Dict]) -> str:
         """Build the complete prompt for Gemini for a single product with full JSON output"""
         
-        # We now assume 'products' list contains only one product for this prompt
         if not products or len(products) != 1:
-            raise ValueError("PromptBuilder.build_prompt expects exactly one product when generating single-product prompts.")
+            raise ValueError("PromptBuilder.build_prompt expects exactly one product.")
         
-        product = products[0] # Get the single product
+        product = products[0]
+        product_sku = product.get('_sku', 'UNKNOWN')
         
-        prompt = f"""You are an expert e-commerce product content writer specializing in SEO-optimized product descriptions for a technology retailer.
+        prompt = f"""You are a Senior Technical Product Specialist for a B2B technology retailer.
+Your audience: IT professionals, network engineers, procurement managers.
+Write with technical precision, not marketing fluff.
 
 {self.categories_text}
 
-You will receive data for ONE product.
+PRODUCT SKU: {product_sku}
 
-__CRITICAL INSTRUCTIONS - For THIS single product, you must generate the following:__
+__CRITICAL SEO REQUIREMENTS__
 
-1. __Product Name__: Extract or generate an appropriate, clear product name from the available data.
+1. __focus_keyphrase__: Generate FIRST (2-4 words, e.g., "HP ProBook Laptop", "Cisco Catalyst Switch").
+   - This keyphrase appears in the 'name' field and meta_description
+   - In the description HTML, the EXACT keyphrase phrase appears ONLY ONCE (in the first paragraph)
+   - EVERYWHERE ELSE in description, use SYNONYMS or DIFFERENT WORDING
 
-   - If unclear, consider general search for verification (do not use specific search tool calls).
-   - Use manufacturer's official product name when possible.
+2. __name__: Format as "[Product Name containing keyphrase] - {product_sku}"
+   The name MUST contain all words from your focus_keyphrase.
+   Example: If keyphrase is "HP ProBook Laptop", name could be "HP ProBook 450 G10 Laptop - 5G9Q2AA"
 
-2. __Description__: Generate ONE 300+ word SEO-optimized, detailed, HTML-formatted description for THIS SPECIFIC PRODUCT. Follow the structure below. Ensure high readability by:
+3. __stock_status__: ALWAYS return "instock".
 
-   - Keeping sentences under 20 words (ideally).
+4. __description__: Generate technical HTML description. MINIMUM 350 WORDS.
 
-   - Keeping paragraphs under 150 words.
+   __KEYPHRASE RULES (EXTREMELY CRITICAL - READ CAREFULLY)__:
+   - The EXACT focus_keyphrase phrase appears ONLY 1 TIME in the entire description HTML
+   - That ONE time is in the first sentence of the intro paragraph inside <strong> tags
+   - The H2 heading should use a SHORTENED product name (not the full keyphrase)
+   - In Key Features, Why Choose, etc. - use SYNONYMS like "this device", "the monitor", "this system"
+   - NEVER repeat the exact keyphrase phrase more than once - this causes RED SEO score
+   
+   __WORD COUNT__:
+   - MINIMUM 350 words in description (this is critical for green SEO)
+   - Include detailed specifications and multiple features
+   
+   __BANNED WORDS__:
+   stunning, perfect, elevate, unleash, immersive, sleek, vibrant, engaging, "perfect for", "ideal for"
+   
+   __WRITING STYLE__:
+   - Technical, factual, specification-focused
+   - Active voice (>90%)
+   - Sentences under 20 words
+   - Use transition words: However, Additionally, Therefore, Consequently
+   
+   __HTML STRUCTURE__:
+   
+   ```html
+   <h2 data-start="..." data-end="...">[SHORT Product Name - NOT full keyphrase]</h2>
+   <p data-start="..." data-end="...">The <strong>[FULL Product Name with KEYPHRASE - this is the ONLY place keyphrase appears]</strong> [technical summary]. [More details]. [Architecture info]. [Capability statement].</p>
 
-   - Using subheadings (H2, H3) to break up content every ~300 words.
+   <h3 data-start="..." data-end="...">Key Features</h3>
+   <ul data-start="..." data-end="...">
+    <li data-start="..." data-end="...">
+        <p data-start="..." data-end="..."><strong>[Feature Title]</strong><br />
+        [ONE technical sentence].</p>
+    </li>
+    <li data-start="..." data-end="...">
+        <p data-start="..." data-end="..."><strong>[Complex Feature Title]</strong></p>
+        <ul data-start="..." data-end="...">
+            <li>[Specific detail 1]</li>
+            <li>[Specific detail 2]</li>
+        </ul>
+    </li>
+   </ul>
 
-   - Incorporating transition words where appropriate.
+   <h3 data-start="..." data-end="...">Specifications</h3>
+   <div class="TyagGW_tableContainer">
+   <div class="group TyagGW_tableWrapper flex w-fit flex-col-reverse">
+   <table class="w-fit min-w-(--thread-content-width)" data-start="..." data-end="...">
+   <thead>
+   <tr>
+   <th data-start="..." data-end="..." data-col-size="sm">Feature</th>
+   <th data-start="..." data-end="..." data-col-size="md">Specification</th>
+   </tr>
+   </thead>
+   <tbody>
+   <tr>
+   <td data-start="..." data-end="..." data-col-size="sm">[Spec Name]</td>
+   <td data-start="..." data-end="..." data-col-size="md">[Value]</td>
+   </tr>
+   </tbody>
+   </table>
+   </div>
+   </div>
 
-   - Limiting passive voice to under 10%.
+   <h3 data-start="..." data-end="...">What's in the Box</h3>
+   <ul>
+    <li><p>[Item]</p></li>
+   </ul>
 
-   - Avoiding 3+ consecutive sentences starting with the same word.
+   <h3 data-start="..." data-end="...">Why Choose [Product Name]</h3>
+   <ul>
+    <li><p>[Technical benefit - use synonyms, NOT the keyphrase]</p></li>
+   </ul>
+   ```
 
-   - __HTML Structure for Description__:
+   __FEATURE FORMAT RULES__:
+   - FORMAT A: `<strong>Title</strong><br />One sentence.`
+   - FORMAT B: `<strong>Title</strong>` then `<ul>` with bullets (NO text before list)
+   - NEVER mix them.
+   
+   __TABLE RULES__:
+   - NO <h4>General</h4> before table
+   - NO <strong> in <th> headers
 
-     ```html
-     <h2 data-start="..." data-end="...">Product Name</h2>
-     <p data-start="..." data-end="...">Introductory paragraph with key product highlights. This paragraph should be engaging and concise, setting the stage for the features. It should clearly introduce the product and its primary benefits.</p>
+5. __short_description__: MUST start with h3 heading matching product name, then table.
+   ```html
+   <h3 data-start="..." data-end="...">[EXACT Product Name from 'name' field, without SKU]</h3>
+   <table>
+   <thead><tr><th></th><th></th></tr></thead>
+   <tbody>
+   <tr><td>[Spec]</td><td>[Value]</td></tr>
+   </tbody>
+   </table>
+   ```
 
-     <h3 data-start="..." data-end="...">Key Features</h3>
-     <ul>
-     	<li><p data-start="..." data-end=""><strong>Feature Name 1</strong><br />Detailed explanation of feature 1, ensuring the text is clear, concise, and easy to read. Break down long sentences and paragraphs.</p></li>
-     	<li><p data-start="..." data-end=""><strong>Feature Name 2</strong><br />Detailed explanation of feature 2, focusing on readability. Use strong tags for emphasis where appropriate and ensure sentence variety.</p></li>
-     	<li><p data-start="..." data-end=""><strong>Feature Name 3</strong><br />Detailed explanation of feature 3. Remember to use transition words and keep the language active and direct.</p></li>
-     </ul>
+6. __categories__: Map to existing category list.
 
-     <h3 data-start="..." data-end="...">Specifications</h3>
-     <h4><strong data-start="..." data-end="...">General</strong></h4>
-     <div class="TyagGW_tableContainer">
-     <div class="group TyagGW_tableWrapper flex w-fit flex-col-reverse">
-     <table class="w-fit min-w-(--thread-content-width)" data-start="..." data-end="...">
-     <thead>
-     <tr>
-     <th data-start="..." data-end="..." data-col-size="sm"><strong data-start="..." data-end="...">Feature</strong></th>
-     <th data-start="..." data-end="..." data-col-size="sm"><strong data-start="..." data-end="...">Specification</strong></th>
-     </tr>
-     </thead>
-     <tbody>
-     <tr>
-     <td data-start="..." data-end="..." data-col-size="sm">Specification Item 1</td>
-     <td data-start="..." data-end="..." data-col-size="sm">Value 1</td>
-     </tr>
-     <tr>
-     <td data-start="..." data-end="..." data-col-size="sm">Specification Item 2</td>
-     <td data-start="..." data-end="..." data-col-size="sm">Value 2</td>
-     </tr>
-     </tbody>
-     </table>
-     </div>
-     </div>
+7. __tags__: 5-15 technical tags.
 
-     <h3 data-start="..." data-end="...">[Relevant Section Heading e.g., Layer 2 & Layer 3 Features]</h3>
-     <ul>
-     	<li><p data-start="..." data-end="">Point 1 about this section, formatted for readability.</p></li>
-     	<li><p data-start="..." data-end="">Point 2 about this section, formatted for readability.</p></li>
-     </ul>
+8. __attributes__: Object with relevant specs.
 
-     <h3 data-start="..." data-end="...">What’s in the Box</h3>
-     <ul>
-     	<li><p data-start="..." data-end="">Item 1</p></li>
-     	<li><p data-start="..." data-end="">Item 2</p></li>
-     </ul>
+9. __meta_description__: STRICTLY 120-140 characters (NEVER exceed 145). Must include keyphrase once.
 
-     <h3 data-start="..." data-end="...">Why Choose [Product Name]</h3>
-     <ul>
-     	<li><p data-start="..." data-end="">Benefit 1</p></li>
-     	<li><p data-start="..." data-end="">Benefit 2</p></li>
-     </ul>
-     ```
+10. __price__: Extract from product data.
 
-   - __IMPORTANT__: Ensure data-start and data-end attributes are included as in the example, but you can use placeholder values like "..." for now.
-
-3. __Short Description__: Generate a concise HTML-formatted summary using a table structure, highlighting key specifications and value propositions. Ensure readability and conciseness. Adhere to the following HTML structure:
-
-   - __HTML Structure for Short Description__:
-
-     ```html
-     <h3 data-start="..." data-end="...">Product Name</h3>
-     <table>
-     <thead>
-     <tr>
-     <th></th>
-     <th></th>
-     </tr>
-     </thead>
-     <tbody>
-     <tr>
-     <td>Feature 1</td>
-     <td>Value 1</td>
-     </tr>
-     <tr>
-     <td>Feature 2</td>
-     <td>Value 2</td>
-     </tr>
-     </tbody>
-     </table>
-     ```
-
-   - __IMPORTANT__: Ensure data-start and data-end attributes are included as in the example, but you can use placeholder values like "..." for now.
-
-4. __Categories__: MAP this product to the most appropriate category from the existing category list above.
-
-   - Use hierarchical format if category has subcategories (e.g., "Computing > Laptops > HP Laptops").
-   - Do NOT create new categories - only use categories from the provided list.
-   - Match based on product name, description, specifications, and product type.
-   - If product could fit multiple categories, choose the most specific/appropriate one.
-   - Return as array of category strings (usually 1 category, but can be multiple if product fits multiple).
-
-5. __Tags__: Generate 5-15 relevant tags based on product features, brand, specifications.
-
-   - Include brand name if identifiable.
-   - Include key specifications (e.g., "8GB RAM", "512GB SSD", "Intel Core i5").
-   - Include product type and features.
-   - Return as array of tag strings.
-
-6. __Attributes__: Extract whatever attributes are relevant for this product type.
-
-   - Attributes vary by product (laptops have processor/RAM/storage, monitors have size/resolution, etc.).
-   - Only include attributes that are verified (either from product data or general knowledge).
-   - Return as object with attribute names as keys and values as strings or arrays.
-   - Example: {{"Processor": "Intel Core i5 1335U", "RAM": "8GB DDR4", "Storage": "512GB SSD"}}.
-
-7. __Focus Keyphrase__: Generate an appropriate SEO keyphrase for this product.
-
-   - Should be 2-4 words.
-   - Include brand and product type when possible.
-   - Example: "HP 15 Laptop" or "Dell Monitor".
-
-8. __Meta Description__: Generate meta description (150-160 characters). STRICTLY adhere to this character limit.
-
-   - Compelling summary for search results.
-   - Include key features and benefits.
-   - Include price if available.
-
-9. __Price__: Extract price from product data if available (numeric value).
-
-   - Use the price provided in product data (this is our selling price).
-   - Do not change or adjust the price.
-
-10. __Stock Status__: Determine stock status from availability data.
-
-    - "instock" if available/Ex-Stock.
-    - "outofstock" if Check Availability or similar.
-    - Default to "instock" if unclear.
-
-__OUTPUT FORMAT__: Return ONLY a valid JSON object. ABSOLUTELY NO other text, conversation, or markdown (e.g., "```json") outside of the JSON object. The JSON object must have this exact structure:
-
-{{ "sku": "product SKU or identifier", "name": "Product Name", "description": "Full 300+ word HTML description", "short_description": "Brief HTML table summary", "categories": ["Category > Subcategory"], "tags": ["tag1", "tag2", "tag3"], "attributes": {{"Attribute Name": "Value"}}, "focus_keyphrase": "SEO keyphrase", "meta_description": "Meta description text (150-160 characters)", "price": 75000, "stock_status": "instock" }}
-
-__CRITICAL REQUIREMENTS__:
-
-- The output MUST be ONLY a valid JSON object, parsable directly by `json.loads()`. Do NOT include any introductory or concluding text, or markdown code block fences (like ```json).
-- Generate content for this ONE product only.
-- Descriptions must be AT LEAST 300 words and in plain text, following the specified HTML structure.
-- Short description must follow the specified HTML table structure.
-- Meta description must be 150-160 characters.
-- Be specific and accurate - use actual product data.
-- Map to existing categories only.
+__OUTPUT__: Return ONLY valid JSON:
+{{ "sku": "{product_sku}", "name": "[Name with keyphrase] - {product_sku}", "description": "...", "short_description": "<h3>Product Name</h3><table>...</table>", "categories": [], "tags": [], "attributes": {{}}, "focus_keyphrase": "...", "meta_description": "...", "price": 0, "stock_status": "instock" }}
 
 {self.format_product_data(product)}
 
-Now, generate the JSON object for this product based on the provided data. """
+Generate the JSON now."""
 
-        
         return prompt

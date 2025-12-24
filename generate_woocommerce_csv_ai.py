@@ -47,7 +47,7 @@ class WooCommerceCSVGeneratorAI:
             return None
         
         # Take a smaller subset for initial sample generation (e.g., first 5 products)
-        products_to_process = all_products[:50]
+        products_to_process = all_products[:10]
         print(f"Processing a sample of {len(products_to_process)} products for review...")
 
         # Process through AI (one product at a time)
