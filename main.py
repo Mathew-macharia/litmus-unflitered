@@ -6,9 +6,9 @@ Main script that orchestrates the entire process
 import os
 import sys
 import argparse
-from enhanced_excel_parser import EnhancedExcelParser
-from ai_content_generator import AIContentGenerator
-from json_to_csv_converter import JSONToCSVConverter
+from parsers.excel_parser import EnhancedExcelParser
+from ai.content_generator import AIContentGenerator
+from exporters.csv_converter import JSONToCSVConverter
 from config import Config
 
 

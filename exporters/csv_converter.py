@@ -1,5 +1,5 @@
 """
-Convert Claude JSON response to WooCommerce CSV format
+Convert AI JSON response to WooCommerce CSV format
 """
 
 import csv

@@ -13,8 +13,13 @@ venv/
 env/
 .venv/
 
-# Output files
-output/
+# Input files (Excel sheets go here)
+input/*
+!input/.gitkeep
+
+# Output files (generated CSVs land here)
+output/*
+!output/.gitkeep
 
 # IDE
 .vscode/

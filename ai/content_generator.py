@@ -6,8 +6,8 @@ Orchestrates product processing through Gemini API
 import json
 import re
 from typing import List, Dict, Optional
-from gemini_api_client import GeminiAPIClient
-from prompt_templates import PromptBuilder
+from ai.gemini_client import GeminiAPIClient
+from ai.prompt_templates import PromptBuilder
 
 
 class AIContentGenerator:

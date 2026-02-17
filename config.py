@@ -20,7 +20,7 @@ class Config:
     BATCH_SIZE: int = 15  # Products per API call (10-20 recommended)
     
     # File paths
-    CATEGORIES_FILE: str = "product_categories.txt"
+    CATEGORIES_FILE: str = "data/product_categories.txt"
     OUTPUT_DIR: str = "output"
     
     # Excel processing
