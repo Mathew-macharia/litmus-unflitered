@@ -75,7 +75,7 @@ class JSONToCSVConverter:
 
         # Attribute 1: Brand (global so WoodMart recognizes it)
         if brand:
-            formatted['Attribute 1 name'] = 'Brand'
+            formatted['Attribute 1 name'] = 'Product brand'
             formatted['Attribute 1 value(s)'] = str(brand)
             formatted['Attribute 1 visible'] = '1'
             formatted['Attribute 1 global'] = '1'
