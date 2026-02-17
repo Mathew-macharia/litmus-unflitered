@@ -14,6 +14,8 @@ Write with technical precision, not marketing fluff.
 
 {categories_text}
 
+{brands_text}
+
 PRODUCT SKU: {product_sku}
 
 DISTRIBUTOR SEARCH REQUIREMENTS
@@ -145,18 +147,18 @@ Html
 </table>
 
 categories: Map to existing category list.
-SELECT ONLY THE DEEPEST/MOST SPECIFIC PATH.
-Do NOT select a parent category if you have selected its child.
-Example: Choose "Accessories>Computing Accessories>Laptop Chargers", NOT "Accessories".
-Select 1-2 categories max. NEVER invent new categories. Use EXACT strings from the list.
+Return ONLY the deepest/most specific path. Use " > " (with spaces) as the separator.
+Example: return "Accessories > Printing Accessories > HP Cartridges & Toners" (not just "Accessories").
+Select 1-2 categories max. NEVER invent new categories. Use EXACT category names from the list.
 
+brand: Map to ONE brand from the brands list above. Use EXACT spelling from the list.
 tags: 5-15 technical tags.
 attributes: Object with relevant specs.
 meta_description: STRICTLY 120-140 characters (NEVER exceed 145). Must include keyphrase once.
 price: Extract from product data.
 
 __OUTPUT__: Return ONLY valid JSON:
-{{ "sku": "{product_sku}", "name": "[Name with keyphrase] - {product_sku}", "description": "...", "short_description": "<h3>Product Name</h3><table>...</table>", "categories": [], "tags": [], "attributes": {{}}, "focus_keyphrase": "...", "meta_description": "...", "price": 0, "stock_status": "instock" }}
+{{ "sku": "{product_sku}", "brand": "...", "name": "[Name with keyphrase]", "description": "...", "short_description": "<h3>Product Name</h3><table>...</table>", "categories": [], "tags": [], "attributes": {{}}, "focus_keyphrase": "...", "meta_description": "...", "price": 0, "stock_status": "instock" }}
 
 {product_data}
 
@@ -166,11 +168,19 @@ Generate the JSON now.'''
 class PromptBuilder:
     """Build prompts for Gemini API"""
     
-    def __init__(self, categories_file: str = "data/product_categories.txt"):
+    def __init__(self, categories_file: str = "data/product_categories.txt", brands_file: str = "data/brands.txt"):
         self.category_extractor = CategoryExtractor(categories_file)
         self.categories_text = self.category_extractor.format_for_prompt()
+        self.brands_text = self._load_brands(brands_file)
         self.location = Config.LOCATION
         self.competitors = Config.COMPETITORS
+    
+    def _load_brands(self, brands_file: str) -> str:
+        """Load brands from file and format for prompt"""
+        with open(brands_file, 'r', encoding='utf-8') as f:
+            brands = [line.strip() for line in f if line.strip()]
+        header = "EXISTING BRANDS (map product to ONE brand from this list, do NOT invent new brands):\n"
+        return header + "\n".join(f"- {b}" for b in brands) + "\n"
     
     def format_product_data(self, product: Dict) -> str:
         """Format single product data for inclusion in prompt"""
@@ -201,6 +211,7 @@ class PromptBuilder:
         
         prompt = PROMPT_TEMPLATE.format(
             categories_text=self.categories_text,
+            brands_text=self.brands_text,
             product_sku=product_sku,
             distributor_sources=self.format_distributor_sources(),
             product_data=self.format_product_data(product),

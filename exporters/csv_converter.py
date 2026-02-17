@@ -6,6 +6,8 @@ import csv
 import os
 from typing import List, Dict, Any
 
+MAX_ATTRIBUTES = 10
+
 
 class JSONToCSVConverter:
     """Convert processed product JSON to WooCommerce CSV"""
@@ -21,60 +23,80 @@ class JSONToCSVConverter:
             'Categories', 'Tags', 'Shipping class', 'Images', 'Download limit',
             'Download expiry days', 'Parent', 'Grouped products', 'Upsells', 'Cross-sells',
             'External URL', 'Button text', 'Position',
-            'Attribute 1 name', 'Attribute 1 value(s)', 'Attribute 1 visible', 'Attribute 1 global',
-            'Attribute 2 name', 'Attribute 2 value(s)', 'Attribute 2 visible', 'Attribute 2 global',
-            'Attribute 3 name', 'Attribute 3 value(s)', 'Attribute 3 visible', 'Attribute 3 global',
+        ]
+        for i in range(1, MAX_ATTRIBUTES + 1):
+            self.columns += [
+                f'Attribute {i} name', f'Attribute {i} value(s)',
+                f'Attribute {i} visible', f'Attribute {i} global',
+            ]
+        self.columns += [
             'Meta: _yoast_wpseo_focuskw', 'Meta: _yoast_wpseo_metadesc',
-            'Image Alt Text', 'Image Caption', 'Image Description'
+            'Image Alt Text', 'Image Caption', 'Image Description',
         ]
     
+    def expand_category_hierarchy(self, category_path: str) -> List[str]:
+        """Expand a category path into all ancestor paths.
+        'A > B > C' becomes ['A', 'A > B', 'A > B > C']
+        so the product is assigned to every level in WooCommerce.
+        """
+        parts = [p.strip() for p in category_path.split('>')]
+        return [' > '.join(parts[:i + 1]) for i in range(len(parts))]
+    
     def format_categories(self, categories: List[str]) -> str:
-        """Format categories for WooCommerce (pipe-separated)"""
+        """Format categories for WooCommerce CSV (comma-separated, full hierarchy).
+        Each deepest path is expanded so the product belongs to every ancestor category.
+        """
         if not categories:
             return ""
-        return " | ".join(categories)
+        all_paths = []
+        for cat in categories:
+            for path in self.expand_category_hierarchy(cat):
+                if path not in all_paths:
+                    all_paths.append(path)
+        return ', '.join(all_paths)
     
     def format_tags(self, tags: List[str]) -> str:
-        """Format tags for WooCommerce (pipe-separated)"""
+        """Format tags for WooCommerce (comma-separated)"""
         if not tags:
             return ""
-        return " | ".join(tags)
+        return ', '.join(tags)
     
-    def format_attributes(self, attributes: Dict[str, Any]) -> Dict[str, str]:
-        """Format attributes for WooCommerce CSV"""
-        formatted = {
-            'Attribute 1 name': '',
-            'Attribute 1 value(s)': '',
-            'Attribute 1 visible': '',
-            'Attribute 1 global': '',
-            'Attribute 2 name': '',
-            'Attribute 2 value(s)': '',
-            'Attribute 2 visible': '',
-            'Attribute 2 global': '',
-            'Attribute 3 name': '',
-            'Attribute 3 value(s)': '',
-            'Attribute 3 visible': '',
-            'Attribute 3 global': '',
-        }
-        
+    def format_attributes(self, brand: str, attributes: Dict[str, Any]) -> Dict[str, str]:
+        """Format brand + attributes for WooCommerce CSV.
+        Attribute 1 is always Brand (global=1 so WooCommerce creates the term).
+        Attributes 2+ are product specs from the AI.
+        """
+        formatted = {}
+        for i in range(1, MAX_ATTRIBUTES + 1):
+            formatted[f'Attribute {i} name'] = ''
+            formatted[f'Attribute {i} value(s)'] = ''
+            formatted[f'Attribute {i} visible'] = ''
+            formatted[f'Attribute {i} global'] = ''
+
+        # Attribute 1: Brand (global so WoodMart recognizes it)
+        if brand:
+            formatted['Attribute 1 name'] = 'Brand'
+            formatted['Attribute 1 value(s)'] = str(brand)
+            formatted['Attribute 1 visible'] = '1'
+            formatted['Attribute 1 global'] = '1'
+
         if not attributes:
             return formatted
-        
-        # Take first 3 attributes
-        attr_items = list(attributes.items())[:3]
-        
-        for i, (attr_name, attr_value) in enumerate(attr_items, 1):
+
+        # Attributes 2+: product specs
+        attr_items = list(attributes.items())[:MAX_ATTRIBUTES - 1]
+
+        for i, (attr_name, attr_value) in enumerate(attr_items, 2):
             formatted[f'Attribute {i} name'] = str(attr_name)
-            
-            # Handle value (could be string, list, or other)
+
             if isinstance(attr_value, list):
                 formatted[f'Attribute {i} value(s)'] = " | ".join(str(v) for v in attr_value)
             else:
                 formatted[f'Attribute {i} value(s)'] = str(attr_value)
-            
+
             formatted[f'Attribute {i} visible'] = '1'
             formatted[f'Attribute {i} global'] = '0'
-        
+
         return formatted
     
     def convert_product(self, product: Dict) -> Dict[str, str]:
@@ -107,7 +129,7 @@ class JSONToCSVConverter:
             'Categories': self.format_categories(product.get('categories', [])),
             'Tags': self.format_tags(product.get('tags', [])),
             'Shipping class': '',
-            'Images': '',  # User will add manually
+            'Images': '',
             'Download limit': '',
             'Download expiry days': '',
             'Parent': '',
@@ -124,8 +146,11 @@ class JSONToCSVConverter:
             'Image Description': f"High-quality image of {product.get('name', '')} showing design and features",
         }
         
-        # Add attributes
-        attributes = self.format_attributes(product.get('attributes', {}))
+        # Add brand as Attribute 1 (global) + AI attributes as Attribute 2+
+        attributes = self.format_attributes(
+            brand=product.get('brand', ''),
+            attributes=product.get('attributes', {}),
+        )
         row.update(attributes)
         
         return row

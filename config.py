@@ -7,7 +7,7 @@ from typing import Optional, List
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Config:
@@ -15,9 +15,6 @@ class Config:
     
     # Gemini API - load from .env file or environment variable
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
-    
-    # Batch settings
-    BATCH_SIZE: int = 15  # Products per API call (10-20 recommended)
     
     # File paths
     CATEGORIES_FILE: str = "data/product_categories.txt"
@@ -46,7 +43,6 @@ class Config:
 
 # For backward compatibility and easy access
 GEMINI_API_KEY = Config.GEMINI_API_KEY
-BATCH_SIZE = Config.BATCH_SIZE
 CATEGORIES_FILE = Config.CATEGORIES_FILE
 OUTPUT_DIR = Config.OUTPUT_DIR
 LOCATION = Config.LOCATION

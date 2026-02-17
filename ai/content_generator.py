@@ -4,8 +4,9 @@ Orchestrates product processing through Gemini API
 """
 
 import json
+import os
 import re
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 from ai.gemini_client import GeminiAPIClient
 from ai.prompt_templates import PromptBuilder
 
@@ -17,106 +18,129 @@ class AIContentGenerator:
         self.api_client = GeminiAPIClient(api_key)
         self.prompt_builder = PromptBuilder()
     
-    def extract_json_from_response(self, response: str) -> Dict:
-        """Extract a single JSON object from Gemini's response"""
-        # Look for JSON object pattern
-        json_pattern = r'\{\s*".*?":.*?\}'
-        match = re.search(json_pattern, response, re.DOTALL)
-        
-        if match:
-            json_str = match.group(0)
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError:
-                pass
-        
-        # Try to find code blocks
-        code_block_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
-        match = re.search(code_block_pattern, response, re.DOTALL)
-        
-        if match:
-            json_str = match.group(1)
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError:
-                pass
-        
-        # Try parsing the entire response as JSON
+    def repair_json(self, text: str) -> str:
+        """Fix common LLM JSON mistakes: mismatched brackets, trailing commas"""
+        chars = list(text)
+        length = len(chars)
+        i = 0
+        in_string = False
+        escape = False
+        stack = []
+
+        while i < length:
+            c = chars[i]
+
+            if escape:
+                escape = False
+                i += 1
+                continue
+
+            if c == '\\' and in_string:
+                escape = True
+                i += 1
+                continue
+
+            if c == '"' and not escape:
+                in_string = not in_string
+                i += 1
+                continue
+
+            if in_string:
+                i += 1
+                continue
+
+            if c in ('{', '['):
+                stack.append(c)
+            elif c in ('}', ']'):
+                if stack:
+                    opener = stack[-1]
+                    expected = '}' if opener == '{' else ']'
+                    if c != expected:
+                        chars[i] = expected
+                    stack.pop()
+
+            i += 1
+
+        result = ''.join(chars)
+        result = re.sub(r',\s*([}\]])', r'\1', result)
+        return result
+    
+    def _try_parse(self, raw: str) -> Optional[Dict]:
+        """Try json.loads, then retry with repair_json as fallback"""
         try:
-            return json.loads(response)
+            return json.loads(raw)
         except json.JSONDecodeError:
             pass
-        
-        raise Exception(f"Could not extract JSON object from Gemini response. Response preview: {response[:500]}")
-    
-    def process_single_product(self, product: Dict) -> Dict:
-        """Process a single product through Gemini API"""
-        print(f"  Processing product: {product.get('name', product.get('sku', 'unknown'))} through Gemini API...")
-        
-        # Build prompt for a single product
-        prompt = self.prompt_builder.build_prompt([product]) # Pass as list for prompt builder
-        
-        # Send to Gemini
         try:
-            response = self.api_client.generate_with_retry(prompt)
-            
-            # Extract single JSON object
-            processed_product = self.extract_json_from_response(response)
-            
-            # For debugging, print the extracted JSON
-            print("\n--- EXTRACTED JSON START ---")
-            print(json.dumps(processed_product, indent=2))
-            print("--- EXTRACTED JSON END ---\n")
-            
-            return processed_product
-            
-        except Exception as e:
-            print(f"    Error processing product {product.get('sku', 'unknown')}: {e}")
-            raise # Re-raise the exception to indicate a problem
+            return json.loads(self.repair_json(raw))
+        except json.JSONDecodeError:
+            return None
+
+    def extract_json_from_response(self, response: str) -> Dict:
+        """Extract a single JSON object from Gemini's response"""
+
+        # Method 1: Find ```json ... ``` code block explicitly (no regex)
+        for marker in ('```json', '```'):
+            start = response.find(marker)
+            if start != -1:
+                content_start = response.find('\n', start)
+                if content_start != -1:
+                    content_start += 1
+                    end = response.find('```', content_start)
+                    if end != -1:
+                        result = self._try_parse(response[content_start:end].strip())
+                        if result is not None:
+                            return result
+
+        # Method 2: Find outermost { to }
+        first = response.find('{')
+        last = response.rfind('}')
+        if first != -1 and last != -1 and last > first:
+            result = self._try_parse(response[first:last + 1])
+            if result is not None:
+                return result
+
+        # Method 3: Try parsing entire response as JSON
+        result = self._try_parse(response)
+        if result is not None:
+            return result
+
+        # All methods failed -- dump the response to a debug file for inspection
+        debug_dir = "output"
+        os.makedirs(debug_dir, exist_ok=True)
+        debug_path = os.path.join(debug_dir, "last_failed_response.txt")
+        with open(debug_path, 'w', encoding='utf-8') as f:
+            f.write(response)
+        
+        raise Exception(f"JSON extraction failed ({len(response)} chars). Raw response saved to {debug_path}")
+    
+    def process_single_product(self, product: Dict, index: int = 1, total: int = 1) -> Dict:
+        """Process a single product through Gemini API"""
+        sku = product.get('_sku', 'unknown')
+        print(f"  [{index}/{total}] {sku}...", end=" ", flush=True)
+        
+        prompt = self.prompt_builder.build_prompt([product])
+        response = self.api_client.generate_with_retry(prompt)
+        processed = self.extract_json_from_response(response)
+        
+        print("OK")
+        return processed
     
     def validate_product(self, product: Dict) -> bool:
         """Validate a processed product has required fields"""
         required_fields = [
-            'sku', 'name', 'description', 'short_description', 'categories',
+            'sku', 'brand', 'name', 'description', 'short_description', 'categories',
             'tags', 'attributes', 'focus_keyphrase', 'meta_description',
             'price', 'stock_status'
         ]
         
         for field in required_fields:
             if field not in product:
-                print(f"    Validation Warning: Product {product.get('sku', 'unknown')} missing field: {field}")
+                print(f"    Validation Warning: missing field '{field}' in {product.get('sku', 'unknown')}")
                 return False
         
-        # Check description length
-        if len(product.get('description', '').split()) < 300:
-            print(f"    Validation Warning: Product {product.get('sku')} description is less than 300 words")
+        word_count = len(product.get('description', '').split())
+        if word_count < 300:
+            print(f"    Validation Warning: {product.get('sku')} description only {word_count} words (target: 300+)")
         
         return True
-    
-    def process_all(self, all_products: List[Dict]) -> List[Dict]:
-        """Process all products one by one"""
-        all_processed = []
-        total_products = len(all_products)
-        
-        print(f"\nProcessing {total_products} products one by one through Gemini API...")
-        
-        for i, product in enumerate(all_products):
-            print(f"\nProduct {i + 1}/{total_products}: {product.get('name', product.get('sku', 'unknown'))}")
-            
-            try:
-                processed = self.process_single_product(product)
-                
-                # Validate product
-                if self.validate_product(processed):
-                    all_processed.append(processed)
-                    print(f"    [OK] Processed product {product.get('sku', 'unknown')}")
-                else:
-                    print(f"    [WARN] Skipping invalid product {product.get('sku', 'unknown')} after processing.")
-                
-            except Exception as e:
-                print(f"    [ERROR] Failed to process product {product.get('sku', 'unknown')}: {e}")
-                # Continue with next product
-                continue
-        
-        print(f"\n[SUCCESS] Processed {len(all_processed)}/{total_products} products successfully")
-        return all_processed
