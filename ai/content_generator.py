@@ -6,9 +6,12 @@ Orchestrates product processing through Gemini API
 import json
 import os
 import re
+import time
 from typing import Dict, Optional
 from ai.gemini_client import GeminiAPIClient
 from ai.prompt_templates import PromptBuilder
+
+FAILED_DIR = os.path.join("output", "failed_responses")
 
 
 class AIContentGenerator:
@@ -17,6 +20,7 @@ class AIContentGenerator:
     def __init__(self, api_key: Optional[str] = None):
         self.api_client = GeminiAPIClient(api_key)
         self.prompt_builder = PromptBuilder()
+        os.makedirs(FAILED_DIR, exist_ok=True)
     
     def repair_json(self, text: str) -> str:
         """Fix common LLM JSON mistakes: mismatched brackets, trailing commas"""
@@ -105,26 +109,36 @@ class AIContentGenerator:
         if result is not None:
             return result
 
-        # All methods failed -- dump the response to a debug file for inspection
-        debug_dir = "output"
-        os.makedirs(debug_dir, exist_ok=True)
-        debug_path = os.path.join(debug_dir, "last_failed_response.txt")
-        with open(debug_path, 'w', encoding='utf-8') as f:
-            f.write(response)
-        
-        raise Exception(f"JSON extraction failed ({len(response)} chars). Raw response saved to {debug_path}")
+        raise Exception(f"JSON extraction failed ({len(response)} chars)")
     
-    def process_single_product(self, product: Dict, index: int = 1, total: int = 1) -> Dict:
-        """Process a single product through Gemini API"""
+    def _save_failed_response(self, sku: str, response: str, attempt: int):
+        """Save a failed response to disk for debugging"""
+        safe_sku = re.sub(r'[^\w\-]', '_', sku)
+        path = os.path.join(FAILED_DIR, f"{safe_sku}_attempt{attempt}.txt")
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(response)
+
+    def process_single_product(self, product: Dict, index: int = 1, total: int = 1, max_retries: int = 2) -> Dict:
+        """Process a single product through Gemini API with retry on bad JSON"""
         sku = product.get('_sku', 'unknown')
         print(f"  [{index}/{total}] {sku}...", end=" ", flush=True)
-        
         prompt = self.prompt_builder.build_prompt([product])
-        response = self.api_client.generate_with_retry(prompt)
-        processed = self.extract_json_from_response(response)
-        
-        print("OK")
-        return processed
+
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            response = self.api_client.generate_with_retry(prompt)
+            try:
+                processed = self.extract_json_from_response(response)
+                print("OK")
+                return processed
+            except Exception as e:
+                last_error = e
+                self._save_failed_response(sku, response, attempt)
+                if attempt < max_retries:
+                    print(f"bad response, retry {attempt}/{max_retries - 1}...", end=" ", flush=True)
+                    time.sleep(2)
+
+        raise Exception(f"{last_error} (after {max_retries} attempts). Saved to {FAILED_DIR}/")
     
     def validate_product(self, product: Dict) -> bool:
         """Validate a processed product has required fields"""

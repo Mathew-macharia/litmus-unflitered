@@ -42,12 +42,16 @@ class JSONToCSVConverter:
         parts = [p.strip() for p in category_path.split('>')]
         return [' > '.join(parts[:i + 1]) for i in range(len(parts))]
     
-    def format_categories(self, categories: List[str]) -> str:
+    def format_categories(self, categories) -> str:
         """Format categories for WooCommerce CSV (comma-separated, full hierarchy).
         Each deepest path is expanded so the product belongs to every ancestor category.
+        Handles AI returning a string instead of a list.
         """
         if not categories:
             return ""
+        # AI sometimes returns a string instead of a list -- wrap it
+        if isinstance(categories, str):
+            categories = [categories]
         all_paths = []
         for cat in categories:
             for path in self.expand_category_hierarchy(cat):
@@ -55,11 +59,13 @@ class JSONToCSVConverter:
                     all_paths.append(path)
         return ', '.join(all_paths)
     
-    def format_tags(self, tags: List[str]) -> str:
+    def format_tags(self, tags) -> str:
         """Format tags for WooCommerce (comma-separated)"""
         if not tags:
             return ""
-        return ', '.join(tags)
+        if isinstance(tags, str):
+            tags = [tags]
+        return ', '.join(str(t) for t in tags)
     
     def format_attributes(self, brand: str, attributes: Dict[str, Any]) -> Dict[str, str]:
         """Format brand + attributes for WooCommerce CSV.

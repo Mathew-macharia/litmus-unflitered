@@ -146,12 +146,13 @@ Html
 </tbody>
 </table>
 
-categories: Map to existing category list.
+categories: Prefer matching to the existing category list when a good fit exists.
 Return ONLY the deepest/most specific path. Use " > " (with spaces) as the separator.
 Example: return "Accessories > Printing Accessories > HP Cartridges & Toners" (not just "Accessories").
-Select 1-2 categories max. NEVER invent new categories. Use EXACT category names from the list.
+Select 1-2 categories max. If no existing category fits, use the closest reasonable path.
 
-brand: Map to ONE brand from the brands list above. Use EXACT spelling from the list.
+brand: Prefer matching to a brand from the brands list above (use EXACT spelling when matching).
+If the product's actual brand is NOT in the list, use the real brand name as-is.
 tags: 5-15 technical tags.
 attributes: Object with relevant specs.
 meta_description: STRICTLY 120-140 characters (NEVER exceed 145). Must include keyphrase once.
@@ -179,7 +180,7 @@ class PromptBuilder:
         """Load brands from file and format for prompt"""
         with open(brands_file, 'r', encoding='utf-8') as f:
             brands = [line.strip() for line in f if line.strip()]
-        header = "EXISTING BRANDS (map product to ONE brand from this list, do NOT invent new brands):\n"
+        header = "KNOWN BRANDS (prefer these when they match, but use the real brand if it's not listed):\n"
         return header + "\n".join(f"- {b}" for b in brands) + "\n"
     
     def format_product_data(self, product: Dict) -> str:

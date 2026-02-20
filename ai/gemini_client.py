@@ -22,7 +22,7 @@ class GeminiAPIClient:
         self.client = genai.Client(api_key=self.api_key)
         self.model = "gemini-3-flash-preview"
     
-    def generate_content(self, prompt: str, max_output_tokens: int = 8192) -> str:
+    def generate_content(self, prompt: str, max_output_tokens: int = 65536) -> str:
         """Send prompt to Gemini and get response"""
         try:
             config = types.GenerateContentConfig(
@@ -37,11 +37,18 @@ class GeminiAPIClient:
             )
             
             if not response.candidates:
-                return ""
+                raise Exception("Empty response: no candidates returned by Gemini")
+
+            candidate = response.candidates[0]
+            finish = getattr(candidate, 'finish_reason', None)
+
+            if finish and str(finish) not in ('STOP', 'FinishReason.STOP'):
+                raise Exception(f"Gemini stopped early (finish_reason={finish}). Response may be truncated.")
 
             if response.text:
                 return response.text
-            return ""
+
+            raise Exception("Empty response: Gemini returned no text content")
                 
         except Exception as e:
             raise Exception(str(e))
