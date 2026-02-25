@@ -20,7 +20,7 @@ class JSONToCSVConverter:
             'Tax status', 'Tax class', 'In stock?', 'Stock', 'Backorders allowed?',
             'Sold individually?', 'Weight (kg)', 'Length (cm)', 'Width (cm)', 'Height (cm)',
             'Allow customer reviews?', 'Purchase note', 'Sale price', 'Regular price',
-            'Categories', 'Tags', 'Shipping class', 'Images', 'Download limit',
+            'Categories', 'Tags', 'tax:brand', 'tax:product_brand', 'Shipping class', 'Images', 'Download limit',
             'Download expiry days', 'Parent', 'Grouped products', 'Upsells', 'Cross-sells',
             'External URL', 'Button text', 'Position',
         ]
@@ -31,7 +31,6 @@ class JSONToCSVConverter:
             ]
         self.columns += [
             'Meta: _yoast_wpseo_focuskw', 'Meta: _yoast_wpseo_metadesc',
-            'Image Alt Text', 'Image Caption', 'Image Description',
         ]
     
     def expand_category_hierarchy(self, category_path: str) -> List[str]:
@@ -81,7 +80,7 @@ class JSONToCSVConverter:
 
         # Attribute 1: Brand (global so WoodMart recognizes it)
         if brand:
-            formatted['Attribute 1 name'] = 'Product brand'
+            formatted['Attribute 1 name'] = 'Brand'
             formatted['Attribute 1 value(s)'] = str(brand)
             formatted['Attribute 1 visible'] = '1'
             formatted['Attribute 1 global'] = '1'
@@ -134,6 +133,8 @@ class JSONToCSVConverter:
             'Regular price': str(int(product.get('price', 0))) if product.get('price') else '',
             'Categories': self.format_categories(product.get('categories', [])),
             'Tags': self.format_tags(product.get('tags', [])),
+            'tax:brand': str(product.get('brand', '')),
+            'tax:product_brand': str(product.get('brand', '')),
             'Shipping class': '',
             'Images': '',
             'Download limit': '',
@@ -147,9 +148,6 @@ class JSONToCSVConverter:
             'Position': '0',
             'Meta: _yoast_wpseo_focuskw': str(product.get('focus_keyphrase', '')),
             'Meta: _yoast_wpseo_metadesc': str(product.get('meta_description', '')),
-            'Image Alt Text': str(product.get('name', '')),
-            'Image Caption': f"{product.get('name', '')} - Product Image",
-            'Image Description': f"High-quality image of {product.get('name', '')} showing design and features",
         }
         
         # Add brand as Attribute 1 (global) + AI attributes as Attribute 2+

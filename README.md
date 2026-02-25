@@ -21,7 +21,6 @@ This tool addresses three main issues with WooCommerce product imports:
 
 1. **Yoast SEO Failures**: AI generates 300+ word descriptions with proper structure, headings, and keyphrase integration
 2. **Missing Related Products**: Maps products to your existing categories and generates relevant tags
-3. **Incomplete Image Metadata**: Includes image metadata columns (requires WP All Import plugin for full support)
 
 ## Prerequisites
 
@@ -117,7 +116,6 @@ python generate_woocommerce_csv_ai.py "excel_file.xlsx" \
 ├── requirements.txt                # Python dependencies
 ├── woocommerce_csv_template.csv   # CSV template example
 ├── IMPORT_GUIDE.md                 # Import instructions
-├── IMAGE_METADATA_SETUP.md         # Image metadata guide
 └── README.md                       # This file
 ```
 
@@ -178,11 +176,6 @@ The generated CSV includes all WooCommerce standard columns plus:
   - `Meta: _yoast_wpseo_focuskw`: AI-generated focus keyphrase
   - `Meta: _yoast_wpseo_metadesc`: AI-generated meta description (150-160 chars)
 
-- **Image Metadata:**
-  - `Image Alt Text`: Auto-generated from product name
-  - `Image Caption`: Product image caption
-  - `Image Description`: Image description
-
 - **Product Attributes:**
   - Dynamically extracted based on product type
   - Examples: Processor, RAM, Storage, Display, etc.
@@ -190,7 +183,6 @@ The generated CSV includes all WooCommerce standard columns plus:
 ## Documentation
 
 - **[IMPORT_GUIDE.md](IMPORT_GUIDE.md)**: Step-by-step guide for importing CSV files into WooCommerce
-- **[IMAGE_METADATA_SETUP.md](IMAGE_METADATA_SETUP.md)**: Guide for handling image metadata
 
 ## Troubleshooting
 
@@ -257,13 +249,11 @@ COMPETITORS = ["supremenetworks.co.ke", "almiria.co.ke", "dataworld.co.ke"]  # C
 
 ## Limitations
 
-1. **Image Metadata**: Standard WooCommerce importer doesn't support image metadata columns. Use WP All Import plugin ($199) for full support.
+1. **API Costs**: Claude API usage incurs costs. Monitor usage and adjust batch size as needed.
 
-2. **API Costs**: Claude API usage incurs costs. Monitor usage and adjust batch size as needed.
+2. **Internet Required**: Requires internet connection for Claude API calls.
 
-3. **Internet Required**: Requires internet connection for Claude API calls.
-
-4. **Processing Time**: AI processing takes time (several seconds per batch). Large product catalogs may take hours.
+3. **Processing Time**: AI processing takes time (several seconds per batch). Large product catalogs may take hours.
 
 ## Support
 

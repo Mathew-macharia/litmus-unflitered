@@ -120,12 +120,15 @@ class EnhancedExcelParser:
     def parse_all_sheets(self, exclude_sheets: List[str] = None) -> List[Dict]:
         """Parse all sheets and extract products"""
         if exclude_sheets is None:
-            exclude_sheets = ['Home page', 'Rental', 'Services']
+            exclude_sheets = ['Home page', 'Main Page', 'Rental', 'Services']
+            
+        # Normalize to lowercase and strip whitespace for robust matching
+        normalized_excludes = [s.strip().lower() for s in exclude_sheets]
         
         all_products = []
         
         for sheet_name, df in self.sheets.items():
-            if sheet_name in exclude_sheets:
+            if sheet_name.strip().lower() in normalized_excludes:
                 continue
             
             print(f"Processing sheet: {sheet_name}")
