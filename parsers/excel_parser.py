@@ -16,13 +16,46 @@ class EnhancedExcelParser:
         self.excel_path = excel_path
         self.sheets = {}
         
+    def find_header_row(self, df_raw: "pd.DataFrame", max_scan: int = 20) -> int:
+        """Scan the first max_scan rows to find the real column-header row.
+
+        Returns the 0-based row index with the highest count of header-like
+        keywords.  Returns 0 (pandas default) if nothing better is found.
+        """
+        HEADER_KEYWORDS = [
+            'part', 'model', 'sku', 'item', 'product', 'description', 'desc',
+            'name', 'details', 'price', 'cost', 'qty', 'quantity', 'stock',
+            'availability', 'avail', 'code', 'reference', 'ref',
+            'number', 'num', 'brand', 'category', 'sap', 'uom', 'unit',
+        ]
+        best_row = 0
+        best_score = 0
+        for row_idx in range(min(max_scan, len(df_raw))):
+            row = df_raw.iloc[row_idx]
+            score = sum(
+                1 for val in row
+                if pd.notna(val) and
+                   any(kw in str(val).strip().lower() for kw in HEADER_KEYWORDS)
+            )
+            if score > best_score:
+                best_score = score
+                best_row = row_idx
+        return best_row
+
     def read_excel(self, sheet_name: Optional[str] = None) -> Dict[str, pd.DataFrame]:
-        """Read Excel file and return dictionary of sheets"""
+        """Read Excel file, auto-detecting the real header row per sheet."""
         try:
-            self.sheets = pd.read_excel(self.excel_path, sheet_name=sheet_name)
-            if isinstance(self.sheets, pd.DataFrame):
-                # Single sheet, convert to dict
-                self.sheets = {'Sheet1': self.sheets}
+            # First pass: no header so we can scan every row freely
+            raw_sheets = pd.read_excel(self.excel_path, sheet_name=sheet_name, header=None)
+            if isinstance(raw_sheets, pd.DataFrame):
+                raw_sheets = {'Sheet1': raw_sheets}
+
+            self.sheets = {}
+            for name, raw_df in raw_sheets.items():
+                header_row = self.find_header_row(raw_df)
+                df = pd.read_excel(self.excel_path, sheet_name=name, header=header_row)
+                self.sheets[name] = df
+
             return self.sheets
         except Exception as e:
             raise Exception(f"Error reading Excel file: {str(e)}")
@@ -99,16 +132,48 @@ class EnhancedExcelParser:
             product_data['_sheet_name'] = sheet_name
             product_data['_row_index'] = idx
             
-            # Try to identify SKU/Part No (common column names)
+            # Identify SKU/model column using prioritised matching.
+            # Priority tiers handle the many naming conventions seen across
+            # supplier sheets made by different people:
+            #   Tier 1 – unambiguous SKU identifiers
+            #   Tier 2 – model/part number variants
+            #   Tier 3 – product/item number variants
+            #   Tier 4 – broader fallbacks (code, ref, article, mpn…)
+            SKU_PRIORITY = [
+                # Tier 1: explicit SKU
+                ['sku'],
+                # Tier 2: part number variants
+                ['part no', 'part number', 'part num', 'part#', 'part #',
+                 'part_no', 'partno', 'partnumber'],
+                # Tier 3: model number variants
+                ['model no', 'model number', 'model num', 'model#', 'model #',
+                 'model_no', 'modelno', 'modelnumber'],
+                # Tier 4: product / item number variants
+                ['product no', 'product number', 'product num', 'product#', 'product #',
+                 'product code', 'product_no', 'productno',
+                 'item no', 'item number', 'item num', 'item#', 'item #',
+                 'item code', 'item_no', 'itemno'],
+                # Tier 5: bare "model" or "part" column
+                ['model', 'part'],
+                # Tier 6: other common identifiers
+                ['reference', 'ref no', 'ref number', 'ref#', 'ref',
+                 'catalog no', 'cat no', 'catalogue no',
+                 'article no', 'article number', 'article',
+                 'mpn', 'sap code', 'sap', 'code'],
+            ]
+
             sku = None
-            for key in product_data.keys():
-                key_lower = str(key).lower()
-                if any(term in key_lower for term in ['part', 'model', 'sku', 'code', 'item']):
-                    sku = product_data[key]
-                    product_data['_sku'] = sku
+            for tier in SKU_PRIORITY:
+                for key in product_data.keys():
+                    key_norm = str(key).strip().lower().replace('_', ' ')
+                    if any(key_norm == term or key_norm.startswith(term) for term in tier):
+                        sku = product_data[key]
+                        product_data['_sku'] = sku
+                        break
+                if sku:
                     break
-            
-            # If no SKU found, generate one
+
+            # If no SKU column matched, generate a positional fallback
             if not sku:
                 sku = f"PROD-{sheet_name}-{idx}"
                 product_data['_sku'] = sku

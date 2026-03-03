@@ -145,7 +145,7 @@ class AIContentGenerator:
         required_fields = [
             'sku', 'brand', 'name', 'description', 'short_description', 'categories',
             'tags', 'attributes', 'focus_keyphrase', 'meta_description',
-            'price', 'stock_status'
+            'sale_price', 'stock_status'
         ]
         
         for field in required_fields:

@@ -156,10 +156,17 @@ If the product's actual brand is NOT in the list, use the real brand name as-is.
 tags: 5-15 technical tags.
 attributes: Object with relevant specs.
 meta_description: STRICTLY 120-140 characters (NEVER exceed 145). Must include keyphrase once.
-price: Extract from product data.
+sale_price: Search for the KES retail price of this product using the following priority order:
+1. Search supremenetworks.co.ke first — find the product and return its KES price as an integer
+2. If not found on supremenetworks, search digitalstore.co.ke
+3. If not found there, search almiria.co.ke
+4. If not found there, search dataworld.co.ke
+Return the KES price as a plain integer (e.g. 45000). No currency symbols, no decimals, no commas.
+If the product cannot be found on ANY of these sites, return 0.
+DO NOT use any price from the product data provided to you — always search the web.
 
 __OUTPUT__: Return ONLY valid JSON:
-{{ "sku": "{product_sku}", "brand": "...", "name": "[Name with keyphrase]", "description": "...", "short_description": "<h3>Product Name</h3><table>...</table>", "categories": [], "tags": [], "attributes": {{}}, "focus_keyphrase": "...", "meta_description": "...", "price": 0, "stock_status": "instock" }}
+{{ "sku": "{product_sku}", "brand": "...", "name": "[Name with keyphrase]", "description": "...", "short_description": "<h3>Product Name</h3><table>...</table>", "categories": [], "tags": [], "attributes": {{}}, "focus_keyphrase": "...", "meta_description": "...", "sale_price": 0, "stock_status": "instock" }}
 
 {product_data}
 
@@ -183,18 +190,33 @@ class PromptBuilder:
         header = "KNOWN BRANDS (prefer these when they match, but use the real brand if it's not listed):\n"
         return header + "\n".join(f"- {b}" for b in brands) + "\n"
     
+    # Keys containing these terms are price-related and are stripped before sending to Gemini
+    # so the AI is forced to search the web rather than echo back distributor cost prices.
+    PRICE_KEY_TERMS = ('price', 'cost', 'usd', 'kes', 'ksh', 'amount', 'rate', 'tariff')
+
+    def _is_price_column(self, key: str) -> bool:
+        """Return True if the column key looks like a price/cost column."""
+        key_lower = str(key).lower()
+        return any(term in key_lower for term in self.PRICE_KEY_TERMS)
+
     def format_product_data(self, product: Dict) -> str:
-        """Format single product data for inclusion in prompt"""
+        """Format single product data for inclusion in prompt.
+        Price-related columns are excluded so Gemini must search the web for prices.
+        """
         formatted = "PRODUCT DATA:\n\n"
-        
-        formatted += f"Product Details:\n"
-        
-        # Include all available data including SKU
+        formatted += "Product Details:\n"
+
         for key, value in product.items():
+            # Skip internal metadata fields
+            if str(key).startswith('_'):
+                formatted += f"  {key}: {value}\n"
+                continue
+            # Skip price/cost columns — Gemini must fetch prices from the web
+            if self._is_price_column(key):
+                continue
             formatted += f"  {key}: {value}\n"
-        
+
         formatted += "\n"
-        
         return formatted
 
     def format_distributor_sources(self) -> str:

@@ -4,9 +4,35 @@ Convert AI JSON response to WooCommerce CSV format
 
 import csv
 import os
+import random
 from typing import List, Dict, Any
 
 MAX_ATTRIBUTES = 10
+
+
+def calculate_regular_price(sale_price: int) -> int:
+    """Back-calculate a regular price that implies a 10–35% discount.
+
+    Formula:
+        discount  = random value in [0.10, 0.35]
+        regular   = sale_price / (1 - discount)
+
+    The result is rounded to a clean number for aesthetics:
+        sale_price < 1 000   → nearest 50
+        sale_price < 10 000  → nearest 100
+        sale_price >= 10 000 → nearest 500
+    """
+    if not sale_price or sale_price <= 0:
+        return 0
+    discount = random.uniform(0.10, 0.35)
+    raw = sale_price / (1.0 - discount)
+    if sale_price < 1000:
+        rounding = 50
+    elif sale_price < 10000:
+        rounding = 100
+    else:
+        rounding = 500
+    return int(round(raw / rounding) * rounding)
 
 
 class JSONToCSVConverter:
@@ -129,8 +155,8 @@ class JSONToCSVConverter:
             'Height (cm)': '',
             'Allow customer reviews?': '1',
             'Purchase note': '',
-            'Sale price': '',
-            'Regular price': str(int(product.get('price', 0))) if product.get('price') else '',
+            'Sale price': str(int(product['sale_price'])) if product.get('sale_price') else '',
+            'Regular price': str(calculate_regular_price(int(product['sale_price']))) if product.get('sale_price') else '',
             'Categories': self.format_categories(product.get('categories', [])),
             'Tags': self.format_tags(product.get('tags', [])),
             'tax:brand': str(product.get('brand', '')),

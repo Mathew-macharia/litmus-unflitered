@@ -21,13 +21,13 @@ class Config:
     OUTPUT_DIR: str = "output"
     
     # Excel processing
-    EXCLUDE_SHEETS: List[str] = ['Home page', 'Main Page', 'Rental', 'Services']
+    EXCLUDE_SHEETS: List[str] = ['Home page', 'Main Page', 'Rental', 'Services', 'BRANDS']
     
     # Location and competitors (for search context)
     LOCATION: str = "Nairobi CBD, Kenya"
     COMPETITORS: List[str] = [
         "supremenetworks.co.ke",
-        "digitalstore.co.ke"
+        "digitalstore.co.ke",
         "almiria.co.ke",
         "dataworld.co.ke",
         "dataworld",
