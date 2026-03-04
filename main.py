@@ -103,28 +103,37 @@ class WooCommerceCSVGeneratorAI:
         # Process through AI (one product per API call)
         processed_products = []
         run_total = len(products_to_process)
+        interrupted = False
         
-        for i, product in enumerate(products_to_process):
-            sku = product.get('_sku', 'unknown')
-            
-            try:
-                result = self.ai_generator.process_single_product(product, index=i + 1, total=run_total)
+        try:
+            for i, product in enumerate(products_to_process):
+                sku = product.get('_sku', 'unknown')
                 
-                if self.ai_generator.validate_product(result):
-                    processed_products.append(result)
+                try:
+                    result = self.ai_generator.process_single_product(product, index=i + 1, total=run_total)
                     
-                    # Save progress immediately after each successful product
-                    progress["processed_skus"].append(sku)
-                    progress["source_file"] = self.excel_path
-                    save_progress(self.output_dir, progress)
-                    processed_skus.add(sku)
-                else:
-                    print(f"  [{i+1}/{run_total}] WARN - Skipped (validation failed): {sku}")
-                    
-            except Exception as e:
-                err_msg = str(e)[:150]
-                print(f"\n  [{i+1}/{run_total}] ERROR - {sku}: {err_msg}")
-                continue
+                    if self.ai_generator.validate_product(result):
+                        processed_products.append(result)
+                        
+                        # Save progress immediately after each successful product
+                        progress["processed_skus"].append(sku)
+                        progress["source_file"] = self.excel_path
+                        save_progress(self.output_dir, progress)
+                        processed_skus.add(sku)
+                    else:
+                        print(f"  [{i+1}/{run_total}] WARN - Skipped (validation failed): {sku}")
+                        
+                except KeyboardInterrupt:
+                    print(f"\n\n  Interrupted at product {i+1}/{run_total}. Saving progress...")
+                    interrupted = True
+                    break
+                except Exception as e:
+                    err_msg = str(e)[:150]
+                    print(f"\n  [{i+1}/{run_total}] ERROR - {sku}: {err_msg}")
+                    continue
+        except KeyboardInterrupt:
+            print(f"\n\n  Interrupted. Saving progress...")
+            interrupted = True
         
         if len(processed_products) == 0:
             print("\nNo products were successfully processed.")
@@ -140,7 +149,10 @@ class WooCommerceCSVGeneratorAI:
         total_processed_overall = len(progress.get("processed_skus", []))
         remaining = total_in_excel - total_processed_overall
         
-        print("\n=== Run Complete ===")
+        if interrupted:
+            print("\n=== Run Interrupted (data saved) ===")
+        else:
+            print("\n=== Run Complete ===")
         print(f"  Processed this run: {len(processed_products)}/{run_total} successful")
         print(f"  Total processed overall: {total_processed_overall}/{total_in_excel}")
         print(f"  Remaining: {remaining}")

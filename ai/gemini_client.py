@@ -28,6 +28,7 @@ class GeminiAPIClient:
             config = types.GenerateContentConfig(
                 max_output_tokens=max_output_tokens,
                 temperature=0.7,
+                tools=[types.Tool(google_search=types.GoogleSearch())],
             )
             
             response = self.client.models.generate_content(

@@ -15,6 +15,14 @@ class EnhancedExcelParser:
     def __init__(self, excel_path: str):
         self.excel_path = excel_path
         self.sheets = {}
+    
+    @staticmethod
+    def _normalize(name: str) -> str:
+        """Collapse a sheet name to a canonical form for fuzzy matching.
+        Lowercases, then strips all spaces, hyphens, and underscores so that
+        'Home page', 'Homepage', 'home-page', 'Home_Page' all become 'homepage'.
+        """
+        return re.sub(r'[\s\-_]+', '', name.strip().lower())
         
     def find_header_row(self, df_raw: "pd.DataFrame", max_scan: int = 20) -> int:
         """Scan the first max_scan rows to find the real column-header row.
@@ -187,13 +195,12 @@ class EnhancedExcelParser:
         if exclude_sheets is None:
             exclude_sheets = ['Home page', 'Main Page', 'Rental', 'Services']
             
-        # Normalize to lowercase and strip whitespace for robust matching
-        normalized_excludes = [s.strip().lower() for s in exclude_sheets]
+        normalized_excludes = {self._normalize(s) for s in exclude_sheets}
         
         all_products = []
         
         for sheet_name, df in self.sheets.items():
-            if sheet_name.strip().lower() in normalized_excludes:
+            if self._normalize(sheet_name) in normalized_excludes:
                 continue
             
             print(f"Processing sheet: {sheet_name}")

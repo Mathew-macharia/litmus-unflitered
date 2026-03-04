@@ -5,34 +5,38 @@ Convert AI JSON response to WooCommerce CSV format
 import csv
 import os
 import random
+import math
 from typing import List, Dict, Any
 
 MAX_ATTRIBUTES = 10
 
 
+def round_sale_price(price: int) -> int:
+    """Round the sale price up to nearest 50 (if <1000) or 100 (if >=1000)."""
+    if not price or price <= 0:
+        return 0
+    if price < 1000:
+        return int(math.ceil(price / 50.0) * 50)
+    else:
+        return int(math.ceil(price / 100.0) * 100)
+
+
 def calculate_regular_price(sale_price: int) -> int:
     """Back-calculate a regular price that implies a 10–35% discount.
 
-    Formula:
-        discount  = random value in [0.10, 0.35]
-        regular   = sale_price / (1 - discount)
-
-    The result is rounded to a clean number for aesthetics:
-        sale_price < 1 000   → nearest 50
-        sale_price < 10 000  → nearest 100
-        sale_price >= 10 000 → nearest 500
+    The result is rounded UP to a clean number:
+        regular < 1000   → nearest 50
+        regular >= 1000  → nearest 100
     """
     if not sale_price or sale_price <= 0:
         return 0
     discount = random.uniform(0.10, 0.35)
     raw = sale_price / (1.0 - discount)
-    if sale_price < 1000:
-        rounding = 50
-    elif sale_price < 10000:
-        rounding = 100
+    
+    if raw < 1000:
+        return int(math.ceil(raw / 50.0) * 50)
     else:
-        rounding = 500
-    return int(round(raw / rounding) * rounding)
+        return int(math.ceil(raw / 100.0) * 100)
 
 
 class JSONToCSVConverter:
@@ -155,7 +159,7 @@ class JSONToCSVConverter:
             'Height (cm)': '',
             'Allow customer reviews?': '1',
             'Purchase note': '',
-            'Sale price': str(int(product['sale_price'])) if product.get('sale_price') else '',
+            'Sale price': str(round_sale_price(int(product['sale_price']))) if product.get('sale_price') else '',
             'Regular price': str(calculate_regular_price(int(product['sale_price']))) if product.get('sale_price') else '',
             'Categories': self.format_categories(product.get('categories', [])),
             'Tags': self.format_tags(product.get('tags', [])),
